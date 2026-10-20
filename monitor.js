@@ -45,6 +45,19 @@ const config = {
     timeoutMs: Number(process.env.SIGNUP_TIMEOUT_SECONDS || 120) * 1000,
 };
 
+// Sandboxes enforce their network allowlist through a proxy that Chrome doesn't pick up on its own.
+function proxyFromEnv() {
+    const raw = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+    if (!raw) return undefined;
+    const url = new URL(raw);
+    return {
+        server: `${url.protocol}//${url.host}`,
+        username: decodeURIComponent(url.username) || undefined,
+        password: decodeURIComponent(url.password) || undefined,
+        bypass: process.env.NO_PROXY || process.env.no_proxy || undefined,
+    };
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const seconds = (ms) => `${(ms / 1000).toFixed(1)}s`;
 const now = () => new Date().toLocaleString('sv-SE');
@@ -360,7 +373,7 @@ async function main() {
 
     let browser;
     try {
-        browser = await chromium.launch({ executablePath: config.chromePath, headless: !headed });
+        browser = await chromium.launch({ executablePath: config.chromePath, headless: !headed, proxy: proxyFromEnv() });
     } catch (error) {
         console.error(`Couldn't start Chrome: ${String(error.message).split('\n')[0]}`);
         return 2;
