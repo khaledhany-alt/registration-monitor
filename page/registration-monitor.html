@@ -66,6 +66,17 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 .fresh[data-state="ok"] .dot { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
 .fresh[data-state="stale"] { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
 .fresh[data-state="stale"] .dot { background: var(--warn); }
+.fresh[data-state="paused"] .dot { background: var(--muted); }
+.status { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.toggle {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  padding: 8px 16px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+.toggle:hover:not(:disabled) { border-color: var(--muted); }
+.toggle[data-state="paused"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.toggle:disabled { cursor: default; opacity: 0.55; }
+.control-note { flex-basis: 100%; text-align: right; font-size: 13px; color: var(--muted); }
 
 .lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
 .lane {
@@ -150,6 +161,8 @@ td.detail { min-width: 260px; color: var(--muted); }
 .note { color: var(--muted); font-size: 13px; max-width: 80ch; }
 
 @media (max-width: 520px) {
+  .status { justify-content: flex-start; }
+  .control-note { text-align: left; }
   .lane { padding: 18px; }
   .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .steps li { font-size: 12px; }
@@ -165,7 +178,11 @@ td.detail { min-width: 260px; color: var(--muted); }
       <h1>Registration Monitor</h1>
       <p class="sub">Every hour a bot signs up a real test account on daftra.com and enerpize.com, then checks that the new owner lands signed in to their account.</p>
     </div>
-    <div class="fresh" id="fresh" data-state="idle"><span class="dot"></span><span id="fresh-text">Loading checks</span></div>
+    <div class="status">
+      <div class="fresh" id="fresh" data-state="idle"><span class="dot"></span><span id="fresh-text">Loading checks</span></div>
+      <button type="button" class="toggle" id="toggle" hidden>Pause checks</button>
+      <p class="control-note" id="control-note" hidden></p>
+    </div>
   </header>
 
   <section class="lanes" aria-label="Sites">
@@ -220,6 +237,10 @@ td.detail { min-width: 260px; color: var(--muted); }
   var checks = [];
   var status = "loading";
   var filter = "all";
+  var db = null;
+  var control = { loaded: false, paused: false, changedAt: null };
+  var canControl = true;
+  var busy = false;
 
   function node(tag, props, children) {
     var e = document.createElement(tag);
@@ -285,10 +306,18 @@ td.detail { min-width: 260px; color: var(--muted); }
     var text = document.getElementById("fresh-text");
     if (status === "loading") { box.dataset.state = "idle"; text.textContent = "Loading checks"; return; }
     if (status !== "ready") { box.dataset.state = "stale"; text.textContent = "Live results unavailable"; return; }
+    if (control.paused) {
+      box.dataset.state = "paused";
+      text.textContent = "Checks paused" + (control.changedAt ? " since " + when(control.changedAt) : "");
+      return;
+    }
     if (!checks.length) { box.dataset.state = "idle"; text.textContent = "Waiting for the first check"; return; }
     var last = checks[0].at;
     var age = Date.now() - last.getTime();
-    if (checks[0].brand === "monitor" && age <= STALE_MS) {
+    if (age > STALE_MS && control.changedAt && control.changedAt > last) {
+      box.dataset.state = "idle";
+      text.textContent = "Resumed · the next check runs within the hour";
+    } else if (checks[0].brand === "monitor" && age <= STALE_MS) {
       box.dataset.state = "stale";
       text.textContent = "The run at " + when(last) + " couldn’t test the sites";
     } else if (age > STALE_MS) {
@@ -435,11 +464,47 @@ td.detail { min-width: 260px; color: var(--muted); }
     renderLog();
   });
 
+  function setNote(message) {
+    var note = document.getElementById("control-note");
+    note.textContent = message;
+    note.hidden = !message;
+  }
+
+  function renderControl() {
+    var button = document.getElementById("toggle");
+    button.hidden = !control.loaded;
+    button.textContent = control.paused ? "Resume checks" : "Pause checks";
+    button.dataset.state = control.paused ? "paused" : "running";
+    button.disabled = busy || !canControl;
+    if (control.loaded && !canControl) setNote("Only the page owner can pause or resume the checks.");
+  }
+
   function render() {
     renderFresh();
+    renderControl();
     SITES.forEach(renderLane);
     renderLog();
   }
+
+  document.getElementById("toggle").addEventListener("click", async function () {
+    if (!db || busy || !control.loaded) return;
+    var next = !control.paused;
+    busy = true;
+    renderControl();
+    try {
+      await db.doc("control/monitor").set({ paused: next, changedAt: new Date().toISOString() });
+      setNote(next
+        ? "Paused. Hourly runs now stop before signing anything up."
+        : "Resumed. The next check runs within the hour.");
+    } catch (e) {
+      setNote(e && e.code === "invalid_argument"
+        ? "Only the page owner can pause or resume the checks."
+        : "Couldn’t save that. Try again in a moment.");
+    } finally {
+      busy = false;
+      renderControl();
+    }
+  });
 
   document.querySelectorAll(".filters button").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -454,8 +519,21 @@ td.detail { min-width: 260px; color: var(--muted); }
   setInterval(function () { renderFresh(); SITES.forEach(renderLane); }, 60000);
 
   (async function () {
-    var db = window.claude ? await window.claude.use("db") : null;
+    db = window.claude ? await window.claude.use("db") : null;
     if (!db) { status = "unavailable"; render(); return; }
+    var user = await window.claude.use("user");
+    if (user) {
+      try { canControl = Boolean(await Promise.resolve(user.isOwner())); } catch (e) { canControl = true; }
+    }
+    db.doc("control/monitor").onSnapshot(function (snap) {
+      var data = snap.exists ? (snap.data() || {}) : {};
+      var at = data.changedAt ? new Date(String(data.changedAt)) : null;
+      control = { loaded: true, paused: data.paused === true, changedAt: at && !isNaN(at) ? at : null };
+      render();
+    }, function () {
+      control.loaded = false;
+      render();
+    });
     db.collection("checks").orderBy("at", "desc").limit(1000).onSnapshot(function (snap) {
       checks = snap.docs.map(function (d) { return clean(d.id, d.data() || {}); }).filter(Boolean);
       status = "ready";
