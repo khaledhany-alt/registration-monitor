@@ -1,0 +1,469 @@
+<title>Registration Monitor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --fg: #14202c;
+  --muted: #5a6878;
+  --line: #dce2e9;
+  --accent: #2251cc;
+  --ok: #17784a;
+  --ok-soft: #e2f3e9;
+  --bad: #bf2f1d;
+  --bad-soft: #fbe6e2;
+  --warn: #965a00;
+  --warn-soft: #fbefd9;
+  --idle: #cad2db;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1217; --panel: #151c23; --fg: #e4eaf0; --muted: #93a2b1; --line: #27323d;
+    --accent: #86a8ff; --ok: #45c986; --ok-soft: #13291e; --bad: #ff705c; --bad-soft: #351915;
+    --warn: #f0b04a; --warn-soft: #2f2412; --idle: #36414c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1217; --panel: #151c23; --fg: #e4eaf0; --muted: #93a2b1; --line: #27323d;
+  --accent: #86a8ff; --ok: #45c986; --ok-soft: #13291e; --bad: #ff705c; --bad-soft: #351915;
+  --warn: #f0b04a; --warn-soft: #2f2412; --idle: #36414c; color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+p { margin: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); font-size: 0.86em; }
+
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 32px; }
+.top .title { display: grid; gap: 6px; min-width: 0; max-width: 62ch; }
+.top h1 { font-size: clamp(28px, 4vw, 38px); font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+.top .sub { color: var(--muted); }
+.fresh {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line);
+  font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.fresh .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--idle); flex: none; }
+.fresh[data-state="ok"] .dot { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.fresh[data-state="stale"] { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.fresh[data-state="stale"] .dot { background: var(--warn); }
+
+.lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+.lane {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px; display: grid; gap: 18px; align-content: start; min-width: 0;
+  border-top: 4px solid var(--idle);
+}
+.lane[data-state="ok"] { border-top-color: var(--ok); }
+.lane[data-state="bad"] { border-top-color: var(--bad); }
+.lane-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lane-head h2 { font-size: 22px; font-weight: 600; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: var(--bg); color: var(--muted); white-space: nowrap;
+}
+.pill[data-state="ok"] { background: var(--ok-soft); color: var(--ok); }
+.pill[data-state="bad"] { background: var(--bad-soft); color: var(--bad); }
+.verdict { font-family: var(--font-display); font-size: clamp(26px, 3.4vw, 34px); font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+.lane[data-state="bad"] .verdict { color: var(--bad); }
+.since { color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.steps li { display: grid; gap: 7px; font-size: 13px; color: var(--muted); min-width: 0; }
+.steps li::before { content: ""; height: 6px; border-radius: 3px; background: var(--idle); }
+.steps li[data-s="ok"]::before { background: var(--ok); }
+.steps li[data-s="bad"]::before { background: var(--bad); }
+.steps li[data-s="bad"] { color: var(--bad); font-weight: 600; }
+.steps li[data-s="ok"] { color: var(--fg); }
+
+.problem { background: var(--bad-soft); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.problem .err { font-weight: 500; overflow-wrap: anywhere; }
+.trail { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.trail li { display: flex; gap: 8px; }
+.trail li::before { content: "\2192"; color: var(--bad); flex: none; }
+.label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start; gap: 6px 28px; margin: 0; }
+.facts div { display: grid; gap: 2px; min-width: 0; }
+.facts dt { font-size: 12px; color: var(--muted); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.strip-wrap { display: grid; gap: 8px; }
+.strip-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.strip { display: flex; gap: 2px; height: 26px; }
+.strip span { flex: 1 1 0; min-width: 2px; border-radius: 2px; background: var(--line); }
+.strip span[data-s="ok"] { background: var(--ok); }
+.strip span[data-s="bad"] { background: var(--bad); }
+.strip span[data-s]:hover { opacity: 0.7; }
+.readout { font-size: 13px; color: var(--muted); min-height: 1.5em; font-variant-numeric: tabular-nums; }
+
+.empty { color: var(--muted); }
+
+.log { display: grid; gap: 14px; min-width: 0; }
+.log-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.log-head h2 { font-size: 22px; font-weight: 600; }
+.filters { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.filters button {
+  font: inherit; font-size: 14px; border: 0; border-radius: 7px; padding: 5px 12px;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.filters button[aria-pressed="true"] { background: var(--fg); color: var(--panel); }
+.table-scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+td.when, td.took { white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.detail { min-width: 260px; color: var(--muted); }
+.result { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.result[data-s="ok"] { background: var(--ok-soft); color: var(--ok); }
+.result[data-s="bad"] { background: var(--bad-soft); color: var(--bad); }
+.log-foot { color: var(--muted); font-size: 13px; }
+.log-more { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+#log-more {
+  font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg);
+}
+#log-more:hover { border-color: var(--muted); }
+
+.note { color: var(--muted); font-size: 13px; max-width: 80ch; }
+
+@media (max-width: 520px) {
+  .lane { padding: 18px; }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .steps li { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1>Registration Monitor</h1>
+      <p class="sub">Every hour a bot signs up a real test account on daftra.com and enerpize.com, then checks that the new owner lands signed in to their account.</p>
+    </div>
+    <div class="fresh" id="fresh" data-state="idle"><span class="dot"></span><span id="fresh-text">Loading checks</span></div>
+  </header>
+
+  <section class="lanes" aria-label="Sites">
+    <article class="lane" id="lane-daftra" data-state="idle"></article>
+    <article class="lane" id="lane-enerpize" data-state="idle"></article>
+  </section>
+
+  <section class="log" aria-labelledby="log-title">
+    <div class="log-head">
+      <h2 id="log-title">All checks</h2>
+      <div class="filters" role="group" aria-label="Show">
+        <button type="button" id="f-all" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" id="f-daftra" data-filter="daftra" aria-pressed="false">Daftra</button>
+        <button type="button" id="f-enerpize" data-filter="enerpize" aria-pressed="false">Enerpize</button>
+        <button type="button" id="f-failed" data-filter="failed" aria-pressed="false">Failures</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>When</th><th>Site</th><th>Result</th><th>Stopped at</th><th>Took</th><th>Test account</th><th>Details</th></tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+    <div class="log-more">
+      <p class="log-foot" id="log-foot"></p>
+      <button type="button" id="log-more" hidden>Show more checks</button>
+    </div>
+  </section>
+
+  <p class="note">Each check goes through the same four steps a visitor does: open the signup page, fill the form with an Egyptian phone number (a Saudi one can trigger the SMS code step), submit it, and land signed in on the new account. Test accounts are kept; their login URLs start with <span class="mono">regmon</span> and their business name is “Registration Monitor”. The checks run every hour on Claude’s cloud, so they keep going when nobody’s computer is on.</p>
+</div>
+
+<script>
+(function () {
+  var SITES = [
+    { key: "daftra", label: "Daftra" },
+    { key: "enerpize", label: "Enerpize" }
+  ];
+  var STEPS = [
+    ["load", "Page loaded"],
+    ["fill", "Form filled"],
+    ["submit", "Submitted"],
+    ["open account", "Signed in"]
+  ];
+  var STRIP = 48;
+  var STALE_MS = 75 * 60 * 1000;
+  var LOG_PAGE = 48;
+
+  var shown = LOG_PAGE;
+  var checks = [];
+  var status = "loading";
+  var filter = "all";
+
+  function node(tag, props, children) {
+    var e = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(function (k) {
+        if (k === "text") e.textContent = props[k];
+        else if (k === "className") e.className = props[k];
+        else e.setAttribute(k, props[k]);
+      });
+    }
+    (children || []).forEach(function (c) { if (c) e.appendChild(c); });
+    return e;
+  }
+
+  function clean(id, d) {
+    var at = new Date(String(d.at || ""));
+    if (isNaN(at)) return null;
+    var host = String(d.accountHost || "");
+    return {
+      id: id,
+      brand: String(d.brand || ""),
+      at: at,
+      ok: d.ok === true,
+      stage: String(d.stage || ""),
+      error: d.error ? String(d.error) : "",
+      durationMs: Number(d.durationMs) || 0,
+      retried: d.retried === true,
+      accountHost: /^[a-z0-9-]+\.(daftra|enerpize)\.com$/.test(host) ? host : "",
+      trail: Array.isArray(d.trail) ? d.trail.slice(0, 20).map(String) : []
+    };
+  }
+
+  function stepLabel(stage) {
+    if (stage === "setup") return "Monitor setup";
+    for (var i = 0; i < STEPS.length; i++) if (STEPS[i][0] === stage) return STEPS[i][1];
+    return stage || "Unknown step";
+  }
+
+  function isToday(d) {
+    var n = new Date();
+    return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  }
+  var timeFmt = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
+  var dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+  var dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+  function when(d) {
+    if (isToday(d)) return timeFmt.format(d);
+    var days = (Date.now() - d.getTime()) / 864e5;
+    return (days < 6 ? dayFmt.format(d) : dateFmt.format(d)) + " " + timeFmt.format(d);
+  }
+  function span(ms) {
+    var min = Math.max(0, Math.round(ms / 60000));
+    if (min < 1) return "under a minute";
+    if (min < 60) return min + " min";
+    var h = Math.floor(min / 60), m = min % 60;
+    if (h < 48) return h + " h" + (m ? " " + m + " min" : "");
+    return Math.round(h / 24) + " days";
+  }
+  function seconds(ms) { return (ms / 1000).toFixed(1) + " s"; }
+
+  function renderFresh() {
+    var box = document.getElementById("fresh");
+    var text = document.getElementById("fresh-text");
+    if (status === "loading") { box.dataset.state = "idle"; text.textContent = "Loading checks"; return; }
+    if (status !== "ready") { box.dataset.state = "stale"; text.textContent = "Live results unavailable"; return; }
+    if (!checks.length) { box.dataset.state = "idle"; text.textContent = "Waiting for the first check"; return; }
+    var last = checks[0].at;
+    var age = Date.now() - last.getTime();
+    if (checks[0].brand === "monitor" && age <= STALE_MS) {
+      box.dataset.state = "stale";
+      text.textContent = "The run at " + when(last) + " couldn’t test the sites";
+    } else if (age > STALE_MS) {
+      box.dataset.state = "stale";
+      text.textContent = "No check for " + span(age) + " · last at " + when(last);
+    } else {
+      box.dataset.state = "ok";
+      text.textContent = "Last check " + when(last) + " · " + span(age) + " ago";
+    }
+  }
+
+  function renderLane(site) {
+    var lane = document.getElementById("lane-" + site.key);
+    lane.textContent = "";
+    var mine = checks.filter(function (c) { return c.brand === site.key; });
+    var latest = mine[0];
+    var pill = node("span", { className: "pill" });
+    lane.appendChild(node("header", { className: "lane-head" }, [node("h2", { text: site.label }), pill]));
+
+    if (!latest) {
+      lane.dataset.state = "idle";
+      pill.dataset.state = "idle";
+      pill.textContent = status === "ready" ? "No checks yet" : (status === "loading" ? "Loading" : "Unavailable");
+      lane.appendChild(node("p", {
+        className: "empty",
+        text: status === "ready"
+          ? "The first result for " + site.label + " shows up here after the next hourly check."
+          : status === "loading" ? "Loading the latest checks…" : "The live results can’t be read in this view. Open the page on claude.ai while signed in."
+      }));
+      return;
+    }
+
+    var state = latest.ok ? "ok" : "bad";
+    lane.dataset.state = state;
+    pill.dataset.state = state;
+    pill.textContent = latest.ok ? "Working" : "Broken";
+
+    var run = 1;
+    while (run < mine.length && mine[run].ok === latest.ok) run++;
+    var start = mine[run - 1].at;
+    var reachedEnd = run === mine.length;
+    var lasted = Date.now() - start.getTime();
+    var verdict = latest.ok
+      ? (run > 1 ? "Working for " + (reachedEnd ? "at least " : "") + span(lasted) : "Working")
+      : (run > 1 ? "Broken for " + (reachedEnd ? "at least " : "") + span(lasted) : "Broken at the last check");
+    var since = (latest.ok ? "Passed " : "Failed ") + run + (run === 1 ? " check" : " checks in a row") +
+      (run > 1 ? " since " + when(start) : "");
+    lane.appendChild(node("div", null, [node("p", { className: "verdict", text: verdict }), node("p", { className: "since", text: since })]));
+
+    var failedAt = latest.ok ? -1 : STEPS.findIndex(function (s) { return s[0] === latest.stage; });
+    var steps = node("ol", { className: "steps", "aria-label": "Signup steps at the last check" });
+    STEPS.forEach(function (s, i) {
+      var st = latest.ok || failedAt === -1 ? (latest.ok ? "ok" : "idle") : i < failedAt ? "ok" : i === failedAt ? "bad" : "idle";
+      steps.appendChild(node("li", { "data-s": st, text: s[1] }));
+    });
+    lane.appendChild(steps);
+
+    if (!latest.ok) {
+      var problem = node("div", { className: "problem" }, [
+        node("p", { className: "err", text: latest.error || "The check failed without an error message." })
+      ]);
+      if (latest.trail.length) {
+        var trail = node("ol", { className: "trail" });
+        latest.trail.forEach(function (t) { trail.appendChild(node("li", { text: t })); });
+        problem.appendChild(node("p", { className: "label", text: "Pages the browser went through" }));
+        problem.appendChild(trail);
+      }
+      lane.appendChild(problem);
+    }
+
+    var account = latest.accountHost
+      ? node("a", { href: "https://" + latest.accountHost, target: "_blank", rel: "noopener", className: "mono", text: latest.accountHost })
+      : node("span", { text: "Not created" });
+    lane.appendChild(node("dl", { className: "facts" }, [
+      node("div", null, [node("dt", { text: "Last check" }), node("dd", { text: when(latest.at) })]),
+      node("div", null, [node("dt", { text: "Took" }), node("dd", { text: seconds(latest.durationMs) + (latest.retried ? " (retried)" : "") })]),
+      node("div", null, [node("dt", { text: "Test account" }), node("dd", null, [account])])
+    ]));
+
+    var recent = mine.slice(0, STRIP).reverse();
+    var passed = recent.filter(function (c) { return c.ok; }).length;
+    var strip = node("div", { className: "strip", role: "img", "aria-label": "Last " + recent.length + " checks: " + passed + " passed, " + (recent.length - passed) + " failed" });
+    for (var p = recent.length; p < STRIP; p++) strip.appendChild(node("span"));
+    var readout = node("p", { className: "readout", text: "Point at a check to see it" });
+    recent.forEach(function (c) {
+      var label = when(c.at) + " · " + (c.ok ? "Passed in " + seconds(c.durationMs) : "Failed at " + stepLabel(c.stage));
+      var cell = node("span", { "data-s": c.ok ? "ok" : "bad", title: label });
+      cell.addEventListener("mouseenter", function () { readout.textContent = label; });
+      strip.appendChild(cell);
+    });
+    strip.addEventListener("mouseleave", function () { readout.textContent = "Point at a check to see it"; });
+    lane.appendChild(node("div", { className: "strip-wrap" }, [
+      node("div", { className: "strip-head" }, [
+        node("span", { text: "Last " + recent.length + (recent.length === 1 ? " check" : " checks") }),
+        node("span", { text: passed + " of " + recent.length + " passed" })
+      ]),
+      strip,
+      readout
+    ]));
+  }
+
+  function renderLog() {
+    var body = document.getElementById("log-body");
+    var foot = document.getElementById("log-foot");
+    var more = document.getElementById("log-more");
+    body.textContent = "";
+    more.hidden = true;
+    var rows = checks.filter(function (c) {
+      if (filter === "failed") return !c.ok;
+      if (filter === "all") return true;
+      return c.brand === filter;
+    });
+    if (!rows.length) {
+      var msg = status === "ready"
+        ? (checks.length ? "No checks match this filter." : "No checks recorded yet.")
+        : status === "loading" ? "Loading…" : "The live results can’t be read in this view.";
+      body.appendChild(node("tr", null, [node("td", { colspan: "7", className: "empty", text: msg })]));
+      foot.textContent = "";
+      return;
+    }
+    rows.slice(0, shown).forEach(function (c) {
+      var site = SITES.find(function (s) { return s.key === c.brand; });
+      var account = c.accountHost
+        ? node("a", { href: "https://" + c.accountHost, target: "_blank", rel: "noopener", className: "mono", text: c.accountHost.split(".")[0] })
+        : node("span", { className: "empty", text: "—" });
+      body.appendChild(node("tr", null, [
+        node("td", { className: "when", text: when(c.at) }),
+        node("td", { text: site ? site.label : "Monitor" }),
+        node("td", null, [node("span", { className: "result", "data-s": c.ok ? "ok" : "bad", text: c.ok ? "Passed" : "Failed" })]),
+        node("td", { text: c.ok ? "—" : stepLabel(c.stage) }),
+        node("td", { className: "took", text: seconds(c.durationMs) }),
+        node("td", null, [account]),
+        node("td", { className: "detail", text: c.ok ? "" : c.error })
+      ]));
+    });
+    var accounts = checks.filter(function (c) { return c.accountHost; }).length;
+    foot.textContent = "Showing " + Math.min(rows.length, shown) + " of " + rows.length + " checks from the last 30 days. " +
+      accounts + " test " + (accounts === 1 ? "account was" : "accounts were") + " created in that time.";
+    more.hidden = rows.length <= shown;
+  }
+
+  document.getElementById("log-more").addEventListener("click", function () {
+    shown += LOG_PAGE * 2;
+    renderLog();
+  });
+
+  function render() {
+    renderFresh();
+    SITES.forEach(renderLane);
+    renderLog();
+  }
+
+  document.querySelectorAll(".filters button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      filter = b.dataset.filter;
+      shown = LOG_PAGE;
+      document.querySelectorAll(".filters button").forEach(function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+      renderLog();
+    });
+  });
+
+  render();
+  setInterval(function () { renderFresh(); SITES.forEach(renderLane); }, 60000);
+
+  (async function () {
+    var db = window.claude ? await window.claude.use("db") : null;
+    if (!db) { status = "unavailable"; render(); return; }
+    db.collection("checks").orderBy("at", "desc").limit(1000).onSnapshot(function (snap) {
+      checks = snap.docs.map(function (d) { return clean(d.id, d.data() || {}); }).filter(Boolean);
+      status = "ready";
+      render();
+    }, function () {
+      status = "unavailable";
+      render();
+    });
+  })();
+})();
+</script>

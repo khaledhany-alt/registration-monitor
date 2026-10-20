@@ -1,0 +1,17 @@
+{
+  "name": "registration-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Registers a test account on Daftra and Enerpize every hour and reports the result to the Registration Monitor page",
+  "type": "module",
+  "scripts": {
+    "check": "node --env-file-if-exists=.env monitor.js",
+    "dry-run": "node --env-file-if-exists=.env monitor.js --dry-run"
+  },
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
